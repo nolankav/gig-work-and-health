@@ -263,7 +263,7 @@ for(i in 1:NUM_WAVES) {
       c("a_sf12pcs_dv", "b_sf12pcs_dv", "c_sf12pcs_dv", "d_sf12pcs_dv",
         "e_sf12pcs_dv", "f_sf12pcs_dv", "g_sf12pcs_dv", "h_sf12pcs_dv",
         "i_sf12pcs_dv", "j_sf12pcs_dv", "k_sf12pcs_dv", "l_sf12pcs_dv"))
-    )
+  )
 }
 
 # Select columns of interest
@@ -478,7 +478,7 @@ us_demo_12 <- us_demo_12 %>% mutate(
   pre_count = case_when(
     precarious == "Precarious atypical emp." ~ 1,
     TRUE ~ 0),
-  )
+)
 
 # Sum of definitions
 us_demo_12$nonst_count <- us_demo_12$gig_count + us_demo_12$sol_count +
@@ -684,7 +684,7 @@ describeBy(us_demo$mcs3, us_demo$atypical)
 describeBy(us_demo$mcs3, us_demo$precarious)
 
 ##############################################################################
-# Fixed effects models
+# Main fixed effects models
 ##############################################################################
 
 # Models for general health
@@ -888,3 +888,237 @@ modelsummary(list("(1)" = mcs_gig_sub,
   add_header_above(c(" " = 1, "2019-2022" = 3, "2009-2022" = 3)) %>%
   add_header_above(c(" " = 1, "SF-12 Mental Component Summary" = 6)) %>%
   row_spec(row=c(12), hline_after=TRUE)
+
+##############################################################################
+# Robustness check: Lagged employment measures
+##############################################################################
+
+# Reorder dataset by respondent and wave
+us_all <- us_all %>% arrange(as.numeric(pidp), as.numeric(wave))
+
+# Lead health outcomes by 1 wave
+# Equivalent to lagging employment and all covariates
+us_all <- us_all %>%
+  group_by(pidp) %>%
+  mutate(gen_hlth_lead = lead(gen_hlth, n=1)) %>%
+  mutate(illness_lead  = lead(illness,  n=1)) %>%
+  mutate(pcs3_lead     = lead(pcs3,     n=1)) %>%
+  mutate(mcs3_lead     = lead(mcs3,     n=1))
+
+# Models for general health
+gen_aty_all_lag <- felm(gen_hlth_lead ~ atypical +
+                          age + marital + edu |
+                          pidp + wave + region | 0 | pidp,
+                        data=us_all)
+gen_sol_all_lag <- felm(gen_hlth_lead ~ solo_self +
+                          age + marital + edu |
+                          pidp + wave + region | 0 | pidp,
+                        data=us_all)
+gen_pre_all_lag <- felm(gen_hlth_lead ~ precarious +
+                          age + marital + edu |
+                          pidp + wave + region | 0 | pidp,
+                        data=us_all)
+
+# Model for long-standing illness
+ill_aty_all_lag <- felm(illness_lead ~ atypical +
+                          age + marital + edu |
+                          pidp + wave + region | 0 | pidp,
+                        data=us_all)
+ill_sol_all_lag <- felm(illness_lead ~ solo_self +
+                          age + marital + edu |
+                          pidp + wave + region | 0 | pidp,
+                        data=us_all)
+ill_pre_all_lag <- felm(illness_lead ~ precarious +
+                          age + marital + edu |
+                          pidp + wave + region | 0 | pidp,
+                        data=us_all)
+
+# Models for SF-12 Physical Component
+pcs_aty_all_lag <- felm(pcs3_lead ~ atypical +
+                          age + marital + edu |
+                          pidp + wave + region | 0 | pidp,
+                        data=us_all)
+pcs_sol_all_lag <- felm(pcs3_lead ~ solo_self +
+                          age + marital + edu |
+                          pidp + wave + region | 0 | pidp,
+                        data=us_all)
+pcs_pre_all_lag <- felm(pcs3_lead ~ precarious +
+                          age + marital + edu |
+                          pidp + wave + region | 0 | pidp,
+                        data=us_all)
+
+# Models for SF-12 Mental Component
+mcs_aty_all_lag <- felm(mcs3_lead ~ atypical +
+                          age + marital + edu |
+                          pidp + wave + region | 0 | pidp,
+                        data=us_all)
+mcs_sol_all_lag <- felm(mcs3_lead ~ solo_self +
+                          age + marital + edu |
+                          pidp + wave + region | 0 | pidp,
+                        data=us_all)
+mcs_pre_all_lag <- felm(mcs3_lead ~ precarious +
+                          age + marital + edu |
+                          pidp + wave + region | 0 | pidp,
+                        data=us_all)
+
+# List of variable names
+var_names <- c("solo_selfSolo self-employed"        = "Solo self-employment",
+               "atypicalAtypical employment"        = "Atypical employment",
+               "precariousPrecarious atypical emp." = "Precarious atypical emp.",
+               "gig_workNo paid employment"         = "No paid employment",
+               "atypicalNo paid employment"         = "No paid employment",
+               "solo_selfNo paid employment"        = "No paid employment",
+               "precariousNo paid employment"       = "No paid employment")
+
+# Additional row for covariates
+cov_row <- as.data.frame(
+  rbind(cbind("Survey waves", "All", "All", "All"),
+        cbind("Demographic characteristics",   t(rep("Yes", 3))),
+        cbind("Individual fixed effects",      t(rep("Yes", 3))),
+        cbind("Region and year fixed effects", t(rep("Yes", 3))),
+        cbind("Clustered standard errors",     t(rep("Individual", 3)))))
+
+# Compile results into table
+modelsummary(list("(1)" = gen_sol_all_lag,
+                  "(2)" = gen_aty_all_lag,
+                  "(3)" = gen_pre_all_lag),
+             coef_omit   = "age|marital|edu",
+             fmt         = "%.3f",
+             gof_omit    = "Log*|AIC|BIC|F|RMSE|Std|Adj",
+             coef_map    = var_names,
+             add_rows    = cov_row,
+             title       = "1-wave lead for self-reported general health (1 = poor and 5 = excellent).",
+             stars       = c("*"=0.05, "**"=0.01, "***"=0.001),
+             output      = "Self-reported health lag.tex") %>%
+  add_header_above(c(" " = 1, "2009-2022" = 3)) %>%
+  add_header_above(c(" " = 1, "Self-reported general health" = 3)) %>%
+  row_spec(row=c(11), hline_after=TRUE)
+
+# Compile results into table
+modelsummary(list("(1)" = ill_sol_all_lag,
+                  "(2)" = ill_aty_all_lag,
+                  "(3)" = ill_pre_all_lag),
+             coef_omit   = "age|marital|edu",
+             fmt         = "%.3f",
+             gof_omit    = "Log*|AIC|BIC|F|RMSE|Std|Adj",
+             coef_map    = var_names,
+             add_rows    = cov_row,
+             title       = "1-wave lead for long-standing illness or impairment (0 = no and 1 = yes).",
+             stars       = c("*"=0.05, "**"=0.01, "***"=0.001),
+             output      = "Long-standing illness lag.tex") %>%
+  add_header_above(c(" " = 1, "2009-2022" = 3)) %>%
+  add_header_above(c(" " = 1, "Long-standing illness or impairment" = 3)) %>%
+  row_spec(row=c(11), hline_after=TRUE)
+
+# Compile results into table
+modelsummary(list("(1)" = pcs_sol_all_lag,
+                  "(2)" = pcs_aty_all_lag,
+                  "(3)" = pcs_pre_all_lag),
+             coef_omit   = "age|marital|edu",
+             fmt         = "%.3f",
+             gof_omit    = "Log*|AIC|BIC|F|RMSE|Std|Adj",
+             coef_map    = var_names,
+             add_rows    = cov_row,
+             title       = "1-wave lead for SF-12 Physical Component Summary (0 = low function and 100 = high).",
+             stars       = c("*"=0.05, "**"=0.01, "***"=0.001),
+             output      = "SF-12 physical lag.tex") %>%
+  add_header_above(c(" " = 1, "2009-2022" = 3)) %>%
+  add_header_above(c(" " = 1, "SF-12 Physical Component Summary" = 3)) %>%
+  row_spec(row=c(11), hline_after=TRUE)
+
+# Compile results into table
+modelsummary(list("(1)" = mcs_sol_all_lag,
+                  "(2)" = mcs_aty_all_lag,
+                  "(3)" = mcs_pre_all_lag),
+             coef_omit   = "age|marital|edu",
+             fmt         = "%.3f",
+             gof_omit    = "Log*|AIC|BIC|F|RMSE|Std|Adj",
+             coef_map    = var_names,
+             add_rows    = cov_row,
+             title       = "1-wave lead for SF-12 Mental Component Summary (0 = low function and 100 = high).",
+             stars       = c("*"=0.05, "**"=0.01, "***"=0.001),
+             output      = "SF-12 mental lag.tex") %>%
+  add_header_above(c(" " = 1, "2009-2022" = 3)) %>%
+  add_header_above(c(" " = 1, "SF-12 Mental Component Summary" = 3)) %>%
+  row_spec(row=c(11), hline_after=TRUE)
+
+##############################################################################
+# Robustness check: Count of non-standard definitions
+##############################################################################
+
+# Generate numeric definitions
+us_all <- us_all %>% mutate(
+  gig_work_num = case_when(
+    gig_work == "Gig work" ~ 1,
+    !is.na(gig_work) ~ 0))
+us_all <- us_all %>% mutate(
+  atypical_num = case_when(
+    atypical == "Atypical employment" ~ 1,
+    !is.na(atypical) ~ 0))
+us_all <- us_all %>% mutate(
+  solo_self_num = case_when(
+    solo_self == "Solo self-employed" ~ 1,
+    !is.na(solo_self) ~ 0))
+us_all <- us_all %>% mutate(
+  precarious_num = case_when(
+    precarious == "Precarious atypical emp." ~ 1,
+    !is.na(precarious) ~ 0))
+
+# Count number of definitions
+# Only even waves
+us_all$def_count <- rowSums(cbind(us_all$atypical_num, us_all$precarious_num, us_all$solo_self_num), na.rm=T)
+us_all <- us_all %>% mutate(
+  def_count_final = case_when(
+    wave %in% c(2,4,6,8,10,12) & def_count > 0 ~ as.character(def_count),
+    wave %in% c(2,4,6,8,10,12) & employ_raw == 1 ~ "Other paid employment",
+    wave %in% c(2,4,6,8,10,12) & employ_raw == 2 ~ "No paid employment"
+  ))
+us_all$def_count_final <- factor(us_all$def_count_final, levels = c("Other paid employment", "1", "2", "3", "No paid employment"))
+
+# Models with counts of definitions
+gen_count_all <- felm(gen_hlth ~ def_count_final +
+                        age + marital + edu |
+                        pidp + wave + region | 0 | pidp,
+                      data=us_all)
+ill_count_all <- felm(illness ~ def_count_final +
+                        age + marital + edu |
+                        pidp + wave + region | 0 | pidp,
+                      data=us_all)
+pcs_count_all <- felm(pcs3 ~ def_count_final +
+                        age + marital + edu |
+                        pidp + wave + region | 0 | pidp,
+                      data=us_all)
+mcs_count_all <- felm(mcs3 ~ def_count_final +
+                        age + marital + edu |
+                        pidp + wave + region | 0 | pidp,
+                      data=us_all)
+
+# List of variable names
+var_names <- c("def_count_final1"                   = "Meet 1 definition",
+               "def_count_final2"                   = "Meet 2 definitions",
+               "def_count_final3"                   = "Meet 3 definitions",
+               "def_count_finalNo paid employment"  = "No paid employment")
+
+# Additional row for covariates
+cov_row <- as.data.frame(
+  rbind(cbind("Survey waves", "Even", "Even", "Even", "Even"),
+        cbind("Demographic characteristics",   t(rep("Yes", 4))),
+        cbind("Individual fixed effects",      t(rep("Yes", 4))),
+        cbind("Region and year fixed effects", t(rep("Yes", 4))),
+        cbind("Clustered standard errors",     t(rep("Individual", 4)))))
+
+# Compile results into table
+modelsummary(list("Gen. health" = gen_count_all,
+                  "Illness"     = ill_count_all,
+                  "SF-12 PCS"   = pcs_count_all,
+                  "SF-12 MCS"   = mcs_count_all),
+             coef_omit   = "age|marital|edu",
+             fmt         = "%.3f",
+             gof_omit    = "Log*|AIC|BIC|F|RMSE|Std|Adj",
+             coef_map    = var_names,
+             add_rows    = cov_row,
+             title       = "Impact of the count of applicable definitions of non-standard employment arrangements compared to standard employment on health outcomes in the U.K.",
+             stars       = c("*"=0.05, "**"=0.01, "***"=0.001),
+             output      = "Count models.tex") %>%
+  add_header_above(c(" " = 1, "2009-2022" = 4)) %>%
+  row_spec(row=c(11), hline_after=TRUE)

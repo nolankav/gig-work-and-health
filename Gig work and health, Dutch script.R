@@ -1,6 +1,7 @@
 # Preliminaries ####
 
 # Load packages
+library(here)         # Working directory
 library(psych)        # Analysis tools
 library(car)          # Analysis tools
 library(dplyr)        # Analysis tools
@@ -13,7 +14,7 @@ library(modelsummary) # Table tools
 library(kableExtra)   # Table tools
 library(DescTools)    # Table tools
 
-nl_data = read.csv("./Data/nl_data.csv")
+nl_data = read.csv("nl_data.csv")
 
 # Set factors
 nl_data[nl_data == "No paid employment"] = "No paid \nemployment"
@@ -525,10 +526,9 @@ modelsummary(list(#"(1: 1-3)" = health3_sol_all,
   gof_omit   = "Log*|AIC|BIC|F|RMSE|Std|Adj",
   coef_map   = var_names,
   add_rows   = cov_row,
-  title      = "Effect of job transition on indicated outcomes (OLS).",
-  stars      = c("*"=0.05, "**"=0.01, "***"=0.001)) %>%
-  # add_header_above(c(" " = 1, "2019-2022" = 3, "2009-2022" = 2)) %>%
+  title      = "Impact of transitioning to non-standard employment from standard employment on indicated health outcome.",
+  stars      = c("*"=0.05, "**"=0.01, "***"=0.001),
+  output     = "Dutch models.tex") %>%
   add_header_above(c(" " = 1, 
                      "Self-reported general health (1-5)" = 4,
                      "Mental well-being index (1-5)" = 4))
-
